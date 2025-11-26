@@ -49,7 +49,6 @@ from sklearn.metrics.pairwise import cosine_similarity
 # ----------------- Constantes et Fonctions PAGE-XML -----------------
 PAGE_NS = "http://schema.primaresearch.org/PAGE/gts/pagecontent/2013-07-15"
 NSMAP = {"ns": PAGE_NS}
-
 def get_article_id_from_custom(custom_attr):
     """Extrait l'ID de l'article (e.g., 'a13') de l'attribut custom."""
     if not custom_attr:
@@ -82,9 +81,16 @@ def parse_page_xml(path):
     """
     Parse PAGE XML file et retourne la liste des blocs (un bloc = un TextRegion)
     avec l'ID d'article et le texte consolidé.
-    [MODIFIÉ pour extraction de texte consolidé et article_id]
+    [MISE À JOUR pour une extraction d'article_id plus robuste]
     """
-    tree = etree.parse(str(path))
+    # NOTE: path est déjà une chaîne de caractères dans la pipeline,
+    # mais on s'assure qu'il est utilisable par etree.parse
+    try:
+        tree = etree.parse(str(path))
+    except Exception as e:
+        print(f"Erreur de parsing XML pour {path}: {e}")
+        return []
+
     root = tree.getroot()
 
     # Dimensions de la page
@@ -96,9 +102,18 @@ def parse_page_xml(path):
     # Parcourir TextRegion
     for region in root.findall(".//ns:TextRegion", namespaces=NSMAP):
 
-        # 1. Récupération de l'ID d'Article
-        custom_attr = region.get("custom")
-        article_id = get_article_id_from_custom(custom_attr)
+        # 1. Récupération de l'ID d'Article (Double Vérification pour robustesse)
+
+        # A. Essayer d'abord le custom du TextRegion
+        custom_attr_region = region.get("custom")
+        article_id = get_article_id_from_custom(custom_attr_region)
+
+        # B. Si l'ID n'a pas été trouvé, essayer le custom du premier TextLine (Fallback)
+        if article_id == "N/A":
+            first_textline = region.find(".//ns:TextLine", namespaces=NSMAP)
+            if first_textline is not None:
+                custom_attr_line = first_textline.get("custom")
+                article_id = get_article_id_from_custom(custom_attr_line) # Réessaie d'extraire l'ID
 
         # 2. Récupération du Texte CONSOLIDÉ (Recherche du DERNIER TextEquiv/Unicode dans la Region)
         text = None
@@ -106,7 +121,7 @@ def parse_page_xml(path):
         all_unicode_elements = region.findall(".//ns:TextEquiv/ns:Unicode", namespaces=NSMAP)
 
         if all_unicode_elements:
-            # On prend le texte du dernier élément Unicode trouvé dans la région (correction de la troncature)
+            # On prend le texte du dernier élément Unicode trouvé dans la région
             text = all_unicode_elements[-1].text.strip() if all_unicode_elements[-1].text else None
 
         # 3. Fallback Texte: Concaténation des TextLine si aucun texte consolidé n'est trouvé
@@ -115,6 +130,7 @@ def parse_page_xml(path):
             line_texts = []
             for tl in textlines:
                 te = tl.find(".//ns:TextEquiv/ns:Unicode", namespaces=NSMAP)
+                # Utiliser le texte de l'Unicode s'il existe, sinon concaténer le contenu textuel direct
                 line_text = te.text.strip() if te is not None and te.text else "".join(tl.itertext()).strip()
                 if line_text:
                     line_texts.append(line_text)
