@@ -1,0 +1,2 @@
+# Reconstruction-d-articles-de-journaux-num-ris-s-l-aide-des-LLM
+Les journaux sont transférés sous forme d’images puis traités par OCR, produisant un texte brut. Pour permettre la recherche et l’analyse, il est nécessaire de reconstituer les articles en regroupant les blocs textuels.L’intelligence artificielle et les LLMs offrent de nouvelles possibilités pour analyser et structurer automatiquement ces contenus.
